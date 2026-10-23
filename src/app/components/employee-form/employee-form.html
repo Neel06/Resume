@@ -1,0 +1,131 @@
+
+<div class="form-card">
+
+  <h2>
+    {{ employee() === null
+        ? 'Add Employee'
+        : 'Edit Employee' }}
+  </h2>
+
+  <form
+    [formGroup]="employeeForm"
+    [attr.aria-busy]="busy()"
+    (ngSubmit)="submitForm()">
+
+    <div class="form-grid">
+
+      <!-- Employee Name -->
+      <div class="form-field">
+        <label for="name">Employee Name</label>
+
+        <input
+          id="name"
+          type="text"
+          formControlName="name"
+          placeholder="Enter full name" />
+
+        @if (employeeForm.controls.name.touched &&
+             employeeForm.controls.name.invalid) {
+          <small class="validation-error">
+            Name must contain 2 to 100 characters.
+          </small>
+        }
+      </div>
+
+      <!-- Email -->
+      <div class="form-field">
+        <label for="email">Email Address</label>
+
+        <input
+          id="email"
+          type="email"
+          formControlName="email"
+          placeholder="Enter email" />
+
+        @if (employeeForm.controls.email.touched &&
+             employeeForm.controls.email.invalid) {
+          <small class="validation-error">
+            Enter a valid email (max 150 characters).
+          </small>
+        }
+      </div>
+
+      <!-- Department -->
+      <div class="form-field">
+        <label for="department">Department</label>
+
+        <input
+          id="department"
+          type="text"
+          formControlName="department"
+          placeholder="Enter department" />
+
+        @if (employeeForm.controls.department.touched &&
+             employeeForm.controls.department.invalid) {
+          <small class="validation-error">
+            Department is required (max 50 characters).
+          </small>
+        }
+      </div>
+
+      <!-- Salary -->
+      <div class="form-field">
+        <label for="salary">Salary</label>
+
+        <input
+          id="salary"
+          type="number"
+          min="0"
+          max="9999999999.99"
+          step="0.01"
+          formControlName="salary" />
+
+        @if (employeeForm.controls.salary.touched &&
+             employeeForm.controls.salary.invalid) {
+          <small class="validation-error">
+            Enter a non-negative salary with up to
+            two decimal places.
+          </small>
+        }
+      </div>
+
+    </div>
+
+    <!-- Error received from parent -->
+    @if (error()) {
+      <p class="error-message" role="alert">
+        {{ error() }}
+      </p>
+    }
+
+    <div class="form-actions">
+
+      <button
+        type="submit"
+        class="save-btn"
+        [disabled]="busy()">
+
+        @if (busy()) {
+          Saving...
+        } @else if (employee() !== null) {
+          Update Employee
+        } @else {
+          Add Employee
+        }
+
+      </button>
+
+      @if (employee() !== null) {
+        <button
+          type="button"
+          class="cancel-btn"
+          [disabled]="busy()"
+          (click)="cancel()">
+          Cancel
+        </button>
+      }
+
+    </div>
+
+  </form>
+</div>
