@@ -3,9 +3,10 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { CreateEmployee } from '../../models/create-employee';
 import { EmployeeService } from '../../services/employee';
 import { EmployeeForm } from '../employee-form/employee-form';
-import { Observable, filter, finalize } from 'rxjs';
+import { Observable, finalize } from 'rxjs';
 import { Employee } from '../../models/Employee';
 import { ApiErrorService } from '../../services/api-error';
+import { EmployeeQuery, PageResult, SortDirection, EmployeeSortBy } from '../../models/employee-pagination';
 
 @Component({
   selector: 'app-employee-list',
@@ -19,7 +20,7 @@ import { ApiErrorService } from '../../services/api-error';
 export class EmployeeList implements OnInit {
 
   private employeeService = inject(EmployeeService);
-  private readonly apiError = inject(ApiErrorService);
+  private readonly apiErrors = inject(ApiErrorService);
 
   // Employee data and request state.
   employees = signal<Employee[]>([]);
@@ -44,6 +45,28 @@ export class EmployeeList implements OnInit {
     () => this.saving() || this.deletingId() !== null
   );
 
+  // Server-side pagination state.
+  pageNumber = signal(1);
+  pageSize = signal(10);
+  totalCount = signal(0);
+
+  // Search input and applied search filter.
+  searchDraft = signal('');
+  search = signal('');
+
+  // Sorting state.
+  sortBy = signal<EmployeeSortBy>('id');
+  sortDirection = signal<SortDirection>('asc');
+
+  // Derived pagination state
+  totalPages = computed(() => Math.ceil(this.totalCount() / this.pageSize()));
+
+  displayTotalPages = computed(() => Math.max(1, this.totalPages()));
+
+  showingFrom = computed(() => this.totalCount() === 0 ? 0 : (this.pageNumber() - 1) * this.pageSize() + 1);
+
+  showingTo = computed(() => Math.min(this.pageNumber() * this.pageSize(), this.totalCount()) );
+
   ngOnInit(): void {
     this.loadEmployees();
   }
@@ -53,18 +76,30 @@ export class EmployeeList implements OnInit {
     this.loading.set(true);
     this.error.set('');
 
-    this.employeeService.getEmployees()
+    const query: EmployeeQuery = {
+      pageNumber: this.pageNumber(),
+      pageSize: this.pageSize(),
+      search: this.search(),
+      sortBy: this.sortBy(),
+      sortDirection: this.sortDirection()
+    }
+
+
+    this.employeeService.getPagedEmployees(query)
       .pipe(
         finalize(() => {
           this.loading.set(false);
         })
       )
       .subscribe({
-        next: (data: Employee[]) => {
-          this.employees.set(data);
+        next: (response) => {
+          // Update only the employees on this page.
+          this.employees.set(response.items);
+          this.totalCount.set(response.totalCount); // Store the total number of matching employees.
         },
-        error: () => {
-          this.error.set('Unable to load employees.');
+        error: (err: HttpErrorResponse) => {
+          this.error.set(this.apiErrors.getMessage(err, 'load')
+          );
         }
       });
   }
@@ -126,6 +161,7 @@ export class EmployeeList implements OnInit {
           this.formVersion.update(version => version + 1);
 
           this.success.set(message);
+          this.pageNumber.set(1);
           this.loadEmployees();
         },
 
@@ -168,12 +204,12 @@ export class EmployeeList implements OnInit {
     this.deletingId.set(employee.emp_Id);
 
     this.employeeService.deleteEmployee(employee.emp_Id)
-    .pipe(finalize(()=>{
-      this.deletingId.set(null);
-    }))
+      .pipe(finalize(() => {
+        this.deletingId.set(null);
+      }))
       .subscribe({
         next: () => {
-          
+
           // Reset form if we deleted the employee being edited.
           if (this.editingEmployee()?.emp_Id === employee.emp_Id) {
             this.editingEmployee.set(null);
@@ -182,7 +218,7 @@ export class EmployeeList implements OnInit {
           }
 
           this.success.set(`${employee.name} deleted successfully!`);
-
+          this.pageNumber.set(1);
           this.loadEmployees();
         },
 
@@ -196,4 +232,99 @@ export class EmployeeList implements OnInit {
         }
       });
   }
+
+  applySearch(): void {
+    if (this.loading()) {
+      return;
+    }
+
+    // Apply the entered search text.
+    this.search.set(this.searchDraft().trim());
+
+    // A new search must begin at page 1.
+    this.pageNumber.set(1);
+    this.loadEmployees();
+  }
+
+  clearSearch(): void {
+    if (this.loading()) {
+      return;
+    }
+
+    this.searchDraft.set('');
+    this.search.set('');
+    this.pageNumber.set(1);
+
+    this.loadEmployees();
+  }
+
+  changeSort(value: string): void {
+    if (this.loading()) {
+      return;
+    }
+
+    // Accept only supported fields.
+    //Type Narrowing
+    if (value !== 'id' && value !== 'name' && value !== 'department' && value !== 'salary') {
+      return;
+    }
+
+    this.sortBy.set(value);
+    this.pageNumber.set(1);
+
+    this.loadEmployees();
+  }
+
+  changeSortDirection(value: string): void {
+    if (this.loading()) {
+      return;
+    }
+
+    if (value !== 'asc' && value !== 'desc') {
+      return;
+    }
+
+    this.sortDirection.set(value);
+    this.pageNumber.set(1);
+
+    this.loadEmployees();
+  }
+
+  changePageSize(value: string): void {
+    if (this.loading()) {
+      return;
+    }
+
+    const size = Number(value);
+
+    // Values available in our UI.
+    if (![5, 10, 20, 50].includes(size)) {
+      return;
+    }
+
+    this.pageSize.set(size);
+    this.pageNumber.set(1);
+
+    this.loadEmployees();
+  }
+
+  goToPage(page: number): void {
+    if (this.loading()) {
+      return;
+    }
+
+    if (page < 1 || page > this.displayTotalPages()) {
+      return;
+    }
+
+    if (page === this.pageNumber()) {
+      return;
+    }
+
+    this.pageNumber.set(page);
+
+    this.loadEmployees();
+  }
+
+
 }
